@@ -1,0 +1,93 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  AUDITOR
+}
+
+enum Activity {
+  RUB
+  WASH
+  MISS
+}
+
+enum GloveStatus {
+  ON
+  OFF
+  CONT
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      Role     @default(AUDITOR)
+
+  clinicId  String
+  clinic    Clinic   @relation(fields: [clinicId], references: [id])
+
+  moments   Moment[]
+  sessions  AuditSession[]
+
+  createdAt DateTime @default(now())
+}
+
+model Clinic {
+  id       String         @id @default(cuid())
+  name     String
+  users    User[]
+  moments  Moment[]
+  sessions AuditSession[]
+}
+
+model StaffCode {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  description String
+  moments     Moment[]
+}
+
+model AuditSession {
+  id        String     @id @default(cuid())
+  date      DateTime
+  startTime DateTime
+  endTime   DateTime?
+
+  clinicId  String
+  clinic    Clinic     @relation(fields: [clinicId], references: [id])
+
+  auditorId String
+  auditor   User       @relation(fields: [auditorId], references: [id])
+
+  moments   Moment[]
+
+  createdAt DateTime   @default(now())
+}
+
+model Moment {
+  id          String       @id @default(cuid())
+  momentNo    Int
+  activity    Activity
+  gloveStatus GloveStatus
+
+  staffCodeId String
+  staffCode   StaffCode    @relation(fields: [staffCodeId], references: [id])
+
+  clinicId    String
+  clinic      Clinic       @relation(fields: [clinicId], references: [id])
+
+  auditorId   String
+  auditor     User         @relation(fields: [auditorId], references: [id])
+
+  sessionId   String
+  session     AuditSession @relation(fields: [sessionId], references: [id])
+
+  createdAt   DateTime     @default(now())
+}
