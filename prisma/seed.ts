@@ -1,12 +1,15 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import bcrypt from "bcryptjs";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
-  const clinic = await prisma.clinic.create({
-    data: { name: "測試診所" },
+  const clinic = await prisma.clinic.upsert({
+    where: { id: "cms8qai170000b4rr4j50tl7t" },
+    update: {},
+    create: { name: "台北腎臟診所" },
   });
 
   const staffCodes = [
@@ -27,6 +30,33 @@ async function main() {
       create: sc,
     });
   }
+
+  const adminPassword = await bcrypt.hash("admin1234", 10);
+  const auditorPassword = await bcrypt.hash("auditor1234", 10);
+
+  await prisma.user.upsert({
+    where: { email: "admin@test.com" },
+    update: {},
+    create: {
+      email: "admin@test.com",
+      password: adminPassword,
+      name: "管理者",
+      role: "ADMIN",
+      clinicId: clinic.id,
+    },
+  });
+
+  await prisma.user.upsert({
+    where: { email: "auditor@test.com" },
+    update: {},
+    create: {
+      email: "auditor@test.com",
+      password: auditorPassword,
+      name: "稽核者 A",
+      role: "AUDITOR",
+      clinicId: clinic.id,
+    },
+  });
 
   console.log("Seed 完成,診所 id:", clinic.id);
 }
