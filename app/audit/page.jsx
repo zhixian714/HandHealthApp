@@ -17,10 +17,10 @@ const STAFF_CODES = [
 
 const MOMENTS = [
   { no: 1, short: "接觸病人前", label: "接觸病人前", detail: "接觸病人前或接觸與病患連接的透析機前" },
-  { no: 2, short: "侵入前", label: "侵入性照護前", detail: "執行侵入性病患照護/程序前" },
-  { no: 3, short: "體液後", label: "體液暴觸後", detail: "執行侵入性病患照護/程序或潛在體液或血液後" },
+  { no: 2, short: "執行程序前", label: "執行程序前", detail: "執行侵入性病患照護/程序前" },
+  { no: 3, short: "執行程序後/曝觸液體血液後", label: "執行程序後/曝觸液體血液後", detail: "執行侵入性病患照護/程序或潛在體液或血液後" },
   { no: 4, short: "接觸病人後", label: "接觸病人後", detail: "接觸病患或與病患連接的透析機後" },
-  { no: 5, short: "接觸環境後", label: "接觸環境後", detail: "僅只有接觸病患周圍物品/環境後" },
+  { no: 5, short: "接觸病人環境後", label: "接觸病人環境後", detail: "僅只有接觸病患周圍物品/環境後" },
 ];
 
 const ACTIVITIES = [
