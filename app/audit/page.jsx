@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { Undo2, Building2, Clock3, CircleUser } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { Pencil, Trash2, Building2, Clock3, CircleUser, Info } from "lucide-react";
 
 // ---- static reference data (from the paper form) ----
 const STAFF_CODES = [
@@ -16,11 +16,11 @@ const STAFF_CODES = [
 ];
 
 const MOMENTS = [
-  { no: 1, label: "接觸病人前", detail: "接觸病人前或接觸與病患連接的透析機前" },
-  { no: 2, label: "侵入性照護前", detail: "執行侵入性病患照護/程序前" },
-  { no: 3, label: "體液暴觸後", detail: "執行侵入性病患照護/程序或潛在體液或血液後" },
-  { no: 4, label: "接觸病人後", detail: "接觸病患或與病患連接的透析機後" },
-  { no: 5, label: "接觸環境後", detail: "僅只有接觸病患周圍物品/環境後" },
+  { no: 1, short: "接觸病人前", label: "接觸病人前", detail: "接觸病人前或接觸與病患連接的透析機前" },
+  { no: 2, short: "執行程序前", label: "執行程序前", detail: "執行侵入性病患照護/程序前" },
+  { no: 3, short: "執行程序後/曝觸液體血液後", label: "執行程序後/曝觸液體血液後", detail: "執行侵入性病患照護/程序或潛在體液或血液後" },
+  { no: 4, short: "接觸病人後", label: "接觸病人後", detail: "接觸病患或與病患連接的透析機後" },
+  { no: 5, short: "接觸病人環境後", label: "接觸病人環境後", detail: "僅只有接觸病患周圍物品/環境後" },
 ];
 
 const ACTIVITIES = [
@@ -35,35 +35,24 @@ const GLOVES = [
   { key: "CONT", label: "Cont" },
 ];
 
-// ---- svg polar helpers for the radial moment gauge ----
-const polar = (cx, cy, r, deg) => {
-  const rad = ((deg - 90) * Math.PI) / 180;
-  return {
-    x: Number((cx + r * Math.cos(rad)).toFixed(2)),
-    y: Number((cy + r * Math.sin(rad)).toFixed(2)),
-  };
-};
-
-const wedgePath = (cx, cy, innerR, outerR, startDeg, endDeg) => {
-  const p1 = polar(cx, cy, outerR, startDeg);
-  const p2 = polar(cx, cy, outerR, endDeg);
-  const p3 = polar(cx, cy, innerR, endDeg);
-  const p4 = polar(cx, cy, innerR, startDeg);
-  const large = endDeg - startDeg > 180 ? 1 : 0;
-  return `M ${p1.x} ${p1.y} A ${outerR} ${outerR} 0 ${large} 1 ${p2.x} ${p2.y} L ${p3.x} ${p3.y} A ${innerR} ${innerR} 0 ${large} 0 ${p4.x} ${p4.y} Z`;
-};
-
 export default function AuditForm() {
-  const [step, setStep] = useState("code"); // code -> moment -> activity -> glove
   const [code, setCode] = useState(null);
   const [moment, setMoment] = useState(null);
   const [activity, setActivity] = useState(null);
   const [entries, setEntries] = useState([]);
+  // when editing an existing entry, remember its id so we can replace it once resubmitted
+  const [editingId, setEditingId] = useState(null);
 
-  const gap = 6; // degree gap between wedges
-  const seg = 360 / 5;
-  const innerR = 46;
-  const outerR = 118;
+  // live clock — updates every second, starts null so server/client markup matches on first render
+  const [now, setNow] = useState(null);
+  useEffect(() => {
+    setNow(new Date());
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const timeLabel = now
+    ? now.toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit", hour12: false })
+    : "--:--";
 
   const counts = useMemo(() => {
     const c = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
@@ -71,24 +60,35 @@ export default function AuditForm() {
     return c;
   }, [entries]);
 
-  const maxCount = Math.max(1, ...Object.values(counts));
-
   const resetFlow = () => {
     setCode(null);
     setMoment(null);
     setActivity(null);
-    setStep("code");
+    setEditingId(null);
   };
 
   const commit = (glove) => {
     setEntries((prev) => [
-      { id: Date.now(), code, moment, activity, glove },
-      ...prev,
+      { id: editingId ?? Date.now(), code, moment, activity, glove },
+      ...prev.filter((e) => e.id !== editingId),
     ]);
     resetFlow();
   };
 
-  const undoLast = () => setEntries((prev) => prev.slice(1));
+  const deleteEntry = (id) => {
+    setEntries((prev) => prev.filter((e) => e.id !== id));
+    if (editingId === id) resetFlow();
+  };
+
+  const editEntry = (entry) => {
+    setCode(entry.code);
+    setMoment(entry.moment);
+    setActivity(entry.activity);
+    setEditingId(entry.id);
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
 
   return (
     <div
@@ -111,10 +111,10 @@ export default function AuditForm() {
             </div>
             <div className="flex items-center gap-2 text-sm" style={{ color: "#5B6B72" }}>
               <Clock3 size={15} />
-              <span className="mono">14:22</span>
+              <span className="mono">{timeLabel}</span>
             </div>
           </div>
-          <div className="flex items-center justify-between mt-2">
+          <div className="flex items-center justify-between mt-2 ">
             <h1 className="num text-2xl tracking-tight" style={{ fontWeight: 700 }}>
               手部衛生稽核
             </h1>
@@ -123,63 +123,40 @@ export default function AuditForm() {
               <span>稽核者 A</span>
             </div>
           </div>
+
+          {editingId && (
+            <div
+              className="mt-3 flex items-center justify-between rounded-lg px-3 py-2 text-sm"
+              style={{ background: "#FFF4E5", border: "1px solid #E8C48A", color: "#8A5A17" }}
+            >
+              <span>正在編輯這一筆紀錄</span>
+              <button onClick={resetFlow} className="text-xs underline">
+                取消編輯
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* radial 5-moments gauge, doubles as live stat readout */}
-        <div className="flex flex-col items-center px-5 mt-1">
-          <svg viewBox="0 0 260 260" width="260" height="260">
-            <circle cx="130" cy="130" r="40" fill="#FFFFFF" stroke="#DDE3E4" />
-            <text x="130" y="126" textAnchor="middle" className="num" fontSize="13" fill="#5B6B72">
-              本次已登記
-            </text>
-            <text x="130" y="146" textAnchor="middle" className="num" fontSize="26" fontWeight="700" fill="#0A4F49">
-              {entries.length}
-            </text>
+        {/* prominent standalone instruction banner — only shown before a code is picked */}
+        {!code && (
+          <div className="px-5 mt-2 mb-4">
+            <div
+              className="flex items-start gap-2.5 rounded-xl px-4 py-3"
+              style={{ background: "#0E6E66", color: "#FFFFFF" }}
+            >
+              <Info size={18} className="mt-0.5 shrink-0" />
+              <div>
+                <div className="text-sm font-semibold">先選代碼，再點選時機</div>
+                <div className="text-xs mt-0.5" style={{ color: "#CDEAE6" }}>
+                  先點選被稽核者的職稱代碼，接著在下方選擇對應的稽核時機
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
-            {MOMENTS.map((m) => {
-              const start = (m.no - 1) * seg + gap / 2;
-              const end = m.no * seg - gap / 2;
-              const filled = innerR + ((outerR - innerR) * counts[m.no]) / maxCount;
-              const isSelected = moment === m.no;
-              const mid = (start + end) / 2;
-              const lp = polar(130, 130, outerR + 20, mid);
-              return (
-                <g key={m.no}>
-                  <path d={wedgePath(130, 130, innerR, outerR, start, end)} fill="#E9EDEE" />
-                  {counts[m.no] > 0 && (
-                    <path d={wedgePath(130, 130, innerR, filled, start, end)} fill="#0E6E66" opacity={0.85} />
-                  )}
-                  <path
-                    d={wedgePath(130, 130, innerR, outerR, start, end)}
-                    fill="transparent"
-                    stroke={isSelected ? "#0E6E66" : "transparent"}
-                    strokeWidth={isSelected ? 3 : 0}
-                    style={{ cursor: code ? "pointer" : "not-allowed" }}
-                    onClick={() => code && (setMoment(m.no), setStep("activity"))}
-                  />
-                  <text
-                    x={lp.x}
-                    y={lp.y}
-                    textAnchor="middle"
-                    className="num"
-                    fontSize="15"
-                    fontWeight="700"
-                    fill="#16242C"
-                    style={{ pointerEvents: "none" }}
-                  >
-                    {m.no}
-                  </text>
-                </g>
-              );
-            })}
-          </svg>
-          <p className="text-sm text-center mt-1 px-4" style={{ color: "#5B6B72", minHeight: 20 }}>
-            {moment ? MOMENTS[moment - 1].detail : "先選代碼，再點選時機"}
-          </p>
-        </div>
-
-        {/* step 1: staff code */}
-        <div className="px-5 mt-5">
+        {/* step 1: staff code — moved to the top */}
+        <div className="px-5">
           <div className="text-xs mb-2 tracking-wide" style={{ color: "#5B6B72" }}>
             代碼
           </div>
@@ -187,7 +164,7 @@ export default function AuditForm() {
             {STAFF_CODES.map((s) => (
               <button
                 key={s.code}
-                onClick={() => (setCode(s.code), setStep("moment"))}
+                onClick={() => setCode(s.code)}
                 className="mono px-3 py-2 rounded-lg text-sm border"
                 style={{
                   borderColor: code === s.code ? "#0E6E66" : "#DDE3E4",
@@ -201,6 +178,65 @@ export default function AuditForm() {
             ))}
           </div>
         </div>
+
+        {/* step 2: moment — option A, vertical list cards instead of the pie gauge */}
+        {code && (
+          <div className="px-5 mt-6">
+            <div className="text-xs mb-2 tracking-wide" style={{ color: "#5B6B72" }}>
+              時機
+            </div>
+            <div className="flex flex-col gap-2">
+              {MOMENTS.map((m) => {
+                const selected = moment === m.no;
+                return (
+                  <button
+                    key={m.no}
+                    onClick={() => setMoment(m.no)}
+                    className="flex items-center gap-3 rounded-xl px-4 py-3 text-left"
+                    style={{
+                      border: `2px solid ${selected ? "#0E6E66" : "#DDE3E4"}`,
+                      background: selected ? "#EAF5F3" : "#FFFFFF",
+                    }}
+                  >
+                    <span
+                      className="num flex items-center justify-center rounded-full shrink-0"
+                      style={{
+                        width: 32,
+                        height: 32,
+                        background: selected ? "#0E6E66" : "#E9EDEE",
+                        color: selected ? "#FFFFFF" : "#16242C",
+                        fontWeight: 700,
+                        fontSize: 15,
+                      }}
+                    >
+                      {m.no}
+                    </span>
+                    <span className="flex-1 text-sm font-semibold">{m.short}</span>
+                    <span
+                      className="mono text-xs px-2 py-1 rounded-full"
+                      style={{ background: "#F1F4F4", color: "#5B6B72" }}
+                    >
+                      {counts[m.no]} 次
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* moment detail — kept in its original position, below the moment picker */}
+            {moment && (
+              <div
+                className="w-full mt-3 rounded-lg px-3 py-2 text-sm text-center"
+                style={{ background: "#FFFFFF", border: "1px solid #DDE3E4" }}
+              >
+                <span className="font-semibold">時機 {moment}：{MOMENTS[moment - 1].label}</span>
+                <div className="text-xs mt-0.5" style={{ color: "#5B6B72" }}>
+                  {MOMENTS[moment - 1].detail}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* step 3/4: activity + glove, only after moment picked */}
         {code && moment && (
@@ -248,30 +284,53 @@ export default function AuditForm() {
           </div>
         )}
 
-        {/* recent entries log */}
+        {/* recent entries log — every row gets its own edit / delete controls */}
         {entries.length > 0 && (
           <div className="px-5 mt-8">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs tracking-wide" style={{ color: "#5B6B72" }}>
-                最近登記
-              </span>
-              <button onClick={undoLast} className="flex items-center gap-1 text-xs" style={{ color: "#A63B33" }}>
-                <Undo2 size={13} /> 復原上一筆
-              </button>
+            <div className="text-xs mb-2 tracking-wide" style={{ color: "#5B6B72" }}>
+              最近登記（共 {entries.length} 筆）
             </div>
             <div className="flex flex-col gap-1.5">
-              {entries.slice(0, 5).map((e) => (
+              {entries.map((e) => (
                 <div
                   key={e.id}
                   className="flex items-center justify-between rounded-lg px-3 py-2 text-sm"
-                  style={{ background: "#FFFFFF", border: "1px solid #DDE3E4" }}
+                  style={{
+                    background: "#FFFFFF",
+                    border: editingId === e.id ? "1px solid #0E6E66" : "1px solid #DDE3E4",
+                  }}
                 >
-                  <span className="mono font-semibold">{e.code}</span>
-                  <span style={{ color: "#5B6B72" }}>時機 {e.moment}</span>
-                  <span style={{ color: ACTIVITIES.find((a) => a.key === e.activity)?.color, fontWeight: 600 }}>
+                  <span className="mono font-semibold w-10">{e.code}</span>
+                  <span style={{ color: "#5B6B72" }} className="w-16">
+                    時機 {e.moment}
+                  </span>
+                  <span
+                    className="w-14"
+                    style={{ color: ACTIVITIES.find((a) => a.key === e.activity)?.color, fontWeight: 600 }}
+                  >
                     {e.activity}
                   </span>
-                  <span style={{ color: "#5B6B72" }}>{e.glove}</span>
+                  <span style={{ color: "#5B6B72" }} className="w-10">
+                    {e.glove}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <button
+                      onClick={() => editEntry(e)}
+                      aria-label="編輯這筆紀錄"
+                      className="p-1.5 rounded-md"
+                      style={{ color: "#5B6B72" }}
+                    >
+                      <Pencil size={14} />
+                    </button>
+                    <button
+                      onClick={() => deleteEntry(e.id)}
+                      aria-label="刪除這筆紀錄"
+                      className="p-1.5 rounded-md"
+                      style={{ color: "#A63B33" }}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </span>
                 </div>
               ))}
             </div>
