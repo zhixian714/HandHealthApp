@@ -7,8 +7,9 @@ datasource db {
 }
 
 enum Role {
-  ADMIN
-  AUDITOR
+  SUPER_ADMIN   // 第一種:看全部醫院/診所的統計,不登記 moment
+  REGION_ADMIN  // 第二種:只看自己管理單位底下的診所統計,不登記 moment
+  AUDITOR       // 第三種:只能登記 moment,只看自己診所的統計
 }
 
 enum Activity {
@@ -23,6 +24,18 @@ enum GloveStatus {
   CONT
 }
 
+// 管理單位:例如「北區管理處」,底下掛多間診所
+// SUPER_ADMIN 不需要綁定任何一個 Organization(視為全區權限)
+model Organization {
+  id      String   @id @default(cuid())
+  name    String
+
+  clinics Clinic[]
+  admins  User[]   // 屬於這個管理單位的 REGION_ADMIN 使用者
+
+  createdAt DateTime @default(now())
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -30,8 +43,13 @@ model User {
   name      String
   role      Role     @default(AUDITOR)
 
-  clinicId  String
-  clinic    Clinic   @relation(fields: [clinicId], references: [id])
+  // AUDITOR 必填;SUPER_ADMIN / REGION_ADMIN 不需要,故改為選填
+  clinicId  String?
+  clinic    Clinic?  @relation(fields: [clinicId], references: [id])
+
+  // 只有 REGION_ADMIN 會用到,綁定他所管理的單位
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
 
   moments   Moment[]
   sessions  AuditSession[]
@@ -42,6 +60,11 @@ model User {
 model Clinic {
   id       String         @id @default(cuid())
   name     String
+
+  // 這間診所屬於哪個管理單位;沒有的話代表尚未分配
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
   users    User[]
   moments  Moment[]
   sessions AuditSession[]
@@ -75,7 +98,9 @@ model Moment {
   id          String       @id @default(cuid())
   momentNo    Int
   activity    Activity
-  gloveStatus GloveStatus
+
+  // 手套狀態改為選填,對應前端表單的調整
+  gloveStatus GloveStatus?
 
   staffCodeId String
   staffCode   StaffCode    @relation(fields: [staffCodeId], references: [id])

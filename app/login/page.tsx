@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { signIn } from "next-auth/react";
+import { signIn, getSession } from "next-auth/react";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -25,7 +25,16 @@ export default function LoginPage() {
       return;
     }
 
-    router.push("/audit");
+    // signIn() alone doesn't return the user's role — pull the freshly
+    // created session to find out who just logged in, then route accordingly.
+    const session = await getSession();
+    const role = session?.user?.role;
+
+    if (role === "SUPER_ADMIN" || role === "REGION_ADMIN") {
+      router.push("/dashboard"); // 統計報表首頁,尚待開發
+    } else {
+      router.push("/audit"); // AUDITOR 維持原本的稽核登記頁
+    }
   };
 
   return (
