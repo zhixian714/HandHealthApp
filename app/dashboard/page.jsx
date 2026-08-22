@@ -1,13 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { Building2, CircleUser, ChevronDown, Download, Calendar } from "lucide-react";
 
-// ---- mock data — real version will come from the session (role/org/clinic) + an API call ----
-const MOCK_CLINICS = [
-  "天成醫院", "天晟醫院", "禾安診所", "百齡診所", "佳禾診所", "佳佑診所", "佳晟診所",
-];
-
+// ---- mock report numbers — the summary card itself still uses placeholder data      ----
+// ---- (wiring this to a real /api/reports endpoint is a separate next step)          ----
 const MOCK_REPORT = {
   totalMoments: 150,
   complianceRate: 78.7,
@@ -32,15 +31,81 @@ const MOCK_REPORT = {
 };
 
 export default function Dashboard() {
-  const [clinic, setClinic] = useState("");
-  const [periodType, setPeriodType] = useState("month"); // "month" | "quarter"
+  const { data: session, status } = useSession();
+  const router = useRouter();
+
+  const [clinics, setClinics] = useState([]);
+  const [loadingClinics, setLoadingClinics] = useState(true);
+  const [clinicId, setClinicId] = useState("");
+  const [periodType, setPeriodType] = useState("month");
   const [period, setPeriod] = useState("");
+  const [downloading, setDownloading] = useState(false);
 
-  const ready = Boolean(clinic && period);
+  // block anyone who isn't SUPER_ADMIN / REGION_ADMIN from seeing this page
+  useEffect(() => {
+    if (status === "loading") return;
+    if (!session?.user) {
+      router.push("/login");
+      return;
+    }
+    if (session.user.role !== "SUPER_ADMIN" && session.user.role !== "REGION_ADMIN") {
+      router.push("/audit");
+    }
+  }, [session, status, router]);
 
-  // for the month/quarter picker options — real version should derive from data available in DB
+  // fetch the clinic list this logged-in person is actually allowed to see
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    setLoadingClinics(true);
+    fetch("/api/clinics")
+      .then((res) => res.json())
+      .then((data) => setClinics(data.clinics ?? []))
+      .finally(() => setLoadingClinics(false));
+  }, [status]);
+
+  const ready = Boolean(clinicId && period);
+  const selectedClinic = clinics.find((c) => c.id === clinicId);
+
   const monthOptions = ["2026-07", "2026-06", "2026-05", "2026-04"];
   const quarterOptions = ["2026-Q3", "2026-Q2", "2026-Q1"];
+
+  const handleDownload = async () => {
+    if (!ready) return;
+    setDownloading(true);
+    try {
+      const params = new URLSearchParams({ clinicId, periodType, period });
+      const res = await fetch(`/api/reports/pdf?${params.toString()}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error ?? "下載失敗，請稍後再試");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      // build the same filename convention the server uses: 診所_年_月.pdf
+      const safeClinicName = (selectedClinic?.name ?? "報表").replace(/[\\/:*?"<>|]/g, "");
+      a.download = `${safeClinicName}_${period.replace("-", "_")}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("下載發生錯誤:", e);
+      alert("發生錯誤，請稍後再試");
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "#F5F7F8" }}>
+        <span style={{ color: "#5B6B72" }}>載入中...</span>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -54,7 +119,6 @@ export default function Dashboard() {
       `}</style>
 
       <div className="w-full max-w-md pb-16" style={{ color: "#16242C" }}>
-        {/* top bar */}
         <div className="px-5 pt-5 pb-4">
           <div className="flex items-center justify-between">
             <h1 className="num text-2xl tracking-tight" style={{ fontWeight: 700 }}>
@@ -62,12 +126,12 @@ export default function Dashboard() {
             </h1>
             <div className="flex items-center gap-1.5 text-sm" style={{ color: "#5B6B72" }}>
               <CircleUser size={15} />
-              <span>督導 A</span>
+              <span>{session?.user?.name}</span>
             </div>
           </div>
         </div>
 
-        {/* step 1: pick a clinic */}
+        {/* step 1: pick a clinic — options now come from /api/clinics based on role */}
         <div className="px-5">
           <div className="text-xs mb-2 tracking-wide" style={{ color: "#5B6B72" }}>
             診所 / 醫院
@@ -79,15 +143,18 @@ export default function Dashboard() {
               style={{ color: "#5B6B72" }}
             />
             <select
-              value={clinic}
-              onChange={(e) => setClinic(e.target.value)}
+              value={clinicId}
+              onChange={(e) => setClinicId(e.target.value)}
+              disabled={loadingClinics}
               className="w-full appearance-none rounded-xl pl-9 pr-9 py-3 text-sm border"
               style={{ borderColor: "#DDE3E4", background: "#FFFFFF", color: "#16242C", fontWeight: 600 }}
             >
-              <option value="">請選擇診所或醫院</option>
-              {MOCK_CLINICS.map((c) => (
-                <option key={c} value={c}>
-                  {c}
+              <option value="">
+                {loadingClinics ? "載入診所清單中..." : "請選擇診所或醫院"}
+              </option>
+              {clinics.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
                 </option>
               ))}
             </select>
@@ -97,10 +164,14 @@ export default function Dashboard() {
               style={{ color: "#5B6B72" }}
             />
           </div>
+          {!loadingClinics && clinics.length === 0 && (
+            <p className="text-xs mt-2" style={{ color: "#A63B33" }}>
+              目前沒有任何可查看的診所，請聯繫系統管理員確認權限設定。
+            </p>
+          )}
         </div>
 
-        {/* step 2: month / quarter toggle + period picker */}
-        {clinic && (
+        {clinicId && (
           <div className="px-5 mt-5">
             <div className="text-xs mb-2 tracking-wide" style={{ color: "#5B6B72" }}>
               統計區間
@@ -141,9 +212,7 @@ export default function Dashboard() {
                 className="w-full appearance-none rounded-xl pl-9 pr-9 py-3 text-sm border"
                 style={{ borderColor: "#DDE3E4", background: "#FFFFFF", color: "#16242C", fontWeight: 600 }}
               >
-                <option value="">
-                  {periodType === "month" ? "請選擇月份" : "請選擇季度"}
-                </option>
+                <option value="">{periodType === "month" ? "請選擇月份" : "請選擇季度"}</option>
                 {(periodType === "month" ? monthOptions : quarterOptions).map((p) => (
                   <option key={p} value={p}>
                     {p}
@@ -159,23 +228,18 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* summary card — only shows once both selections are made */}
         {ready && (
           <div className="px-5 mt-6">
-            <div
-              className="rounded-2xl p-5"
-              style={{ background: "#FFFFFF", border: "1px solid #DDE3E4" }}
-            >
+            <div className="rounded-2xl p-5" style={{ background: "#FFFFFF", border: "1px solid #DDE3E4" }}>
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <div className="text-sm font-semibold">{clinic}</div>
+                  <div className="text-sm font-semibold">{selectedClinic?.name}</div>
                   <div className="text-xs mt-0.5" style={{ color: "#5B6B72" }}>
                     {period}（{periodType === "month" ? "月報" : "季報"}）
                   </div>
                 </div>
               </div>
 
-              {/* headline numbers */}
               <div className="grid grid-cols-2 gap-3 mb-5">
                 <div className="rounded-xl p-3" style={{ background: "#F5F7F8" }}>
                   <div className="text-xs" style={{ color: "#5B6B72" }}>
@@ -195,7 +259,6 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* activity breakdown, with percentages */}
               <div className="mb-5">
                 <div className="text-xs mb-2 tracking-wide" style={{ color: "#5B6B72" }}>
                   執行分佈
@@ -204,14 +267,8 @@ export default function Dashboard() {
                   {MOCK_REPORT.activities.map((a) => (
                     <div key={a.key} className="flex items-center gap-2">
                       <span className="text-xs w-20 shrink-0">{a.label}</span>
-                      <div
-                        className="flex-1 h-2 rounded-full overflow-hidden"
-                        style={{ background: "#F1F4F4" }}
-                      >
-                        <div
-                          className="h-full rounded-full"
-                          style={{ width: `${a.pct}%`, background: a.color }}
-                        />
+                      <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: "#F1F4F4" }}>
+                        <div className="h-full rounded-full" style={{ width: `${a.pct}%`, background: a.color }} />
                       </div>
                       <span className="mono text-xs w-16 text-right shrink-0" style={{ color: "#5B6B72" }}>
                         {a.count}（{a.pct}%）
@@ -221,7 +278,6 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* miss by role, with percentages */}
               <div className="mb-5">
                 <div className="text-xs mb-2 tracking-wide" style={{ color: "#5B6B72" }}>
                   未落實職類排行
@@ -241,7 +297,6 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* miss by moment, with percentages */}
               <div>
                 <div className="text-xs mb-2 tracking-wide" style={{ color: "#5B6B72" }}>
                   未落實時機排行
@@ -259,13 +314,14 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* download button */}
             <button
+              onClick={handleDownload}
+              disabled={downloading}
               className="w-full flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm mt-4"
-              style={{ background: "#16242C", color: "#FFFFFF", fontWeight: 700 }}
+              style={{ background: "#16242C", color: "#FFFFFF", fontWeight: 700, opacity: downloading ? 0.6 : 1 }}
             >
               <Download size={16} />
-              下載 PDF 報表
+              {downloading ? "產生中..." : "下載 PDF 報表"}
             </button>
           </div>
         )}
