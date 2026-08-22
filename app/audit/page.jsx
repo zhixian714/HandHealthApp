@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { Pencil, Trash2, Building2, Clock3, CircleUser, Info } from "lucide-react";
+import { Pencil, Trash2, Building2, Clock3, CircleUser, Info, Check } from "lucide-react";
 
 // ---- static reference data (from the paper form) ----
 const STAFF_CODES = [
@@ -17,10 +17,10 @@ const STAFF_CODES = [
 
 const MOMENTS = [
   { no: 1, short: "接觸病人前", label: "接觸病人前", detail: "接觸病人前或接觸與病患連接的透析機前" },
-  { no: 2, short: "執行程序前", label: "執行程序前", detail: "執行侵入性病患照護/程序前" },
-  { no: 3, short: "執行程序後/曝觸液體血液後", label: "執行程序後/曝觸液體血液後", detail: "執行侵入性病患照護/程序或潛在體液或血液後" },
+  { no: 2, short: "侵入前", label: "侵入性照護前", detail: "執行侵入性病患照護/程序前" },
+  { no: 3, short: "體液後", label: "體液暴觸後", detail: "執行侵入性病患照護/程序或潛在體液或血液後" },
   { no: 4, short: "接觸病人後", label: "接觸病人後", detail: "接觸病患或與病患連接的透析機後" },
-  { no: 5, short: "接觸病人環境後", label: "接觸病人環境後", detail: "僅只有接觸病患周圍物品/環境後" },
+  { no: 5, short: "接觸環境後", label: "接觸環境後", detail: "僅只有接觸病患周圍物品/環境後" },
 ];
 
 const ACTIVITIES = [
@@ -39,11 +39,10 @@ export default function AuditForm() {
   const [code, setCode] = useState(null);
   const [moment, setMoment] = useState(null);
   const [activity, setActivity] = useState(null);
+  const [glove, setGlove] = useState(null); // now optional — no longer auto-commits
   const [entries, setEntries] = useState([]);
-  // when editing an existing entry, remember its id so we can replace it once resubmitted
   const [editingId, setEditingId] = useState(null);
 
-  // live clock — updates every second, starts null so server/client markup matches on first render
   const [now, setNow] = useState(null);
   useEffect(() => {
     setNow(new Date());
@@ -60,16 +59,21 @@ export default function AuditForm() {
     return c;
   }, [entries]);
 
+  // ready to submit once code + moment + activity are set — glove is optional
+  const canSubmit = Boolean(code && moment && activity);
+
   const resetFlow = () => {
     setCode(null);
     setMoment(null);
     setActivity(null);
+    setGlove(null);
     setEditingId(null);
   };
 
-  const commit = (glove) => {
+  const handleSubmit = () => {
+    if (!canSubmit) return;
     setEntries((prev) => [
-      { id: editingId ?? Date.now(), code, moment, activity, glove },
+      { id: editingId ?? Date.now(), code, moment, activity, glove }, // glove may be null
       ...prev.filter((e) => e.id !== editingId),
     ]);
     resetFlow();
@@ -84,6 +88,7 @@ export default function AuditForm() {
     setCode(entry.code);
     setMoment(entry.moment);
     setActivity(entry.activity);
+    setGlove(entry.glove ?? null);
     setEditingId(entry.id);
     if (typeof window !== "undefined") {
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -101,7 +106,7 @@ export default function AuditForm() {
         .mono { font-family:'IBM Plex Mono',monospace; }
       `}</style>
 
-      <div className="w-full max-w-md pb-28" style={{ color: "#16242C" }}>
+      <div className="w-full max-w-md pb-32" style={{ color: "#16242C" }}>
         {/* session bar */}
         <div className="px-5 pt-5 pb-4 sticky top-0 z-10" style={{ background: "#F5F7F8" }}>
           <div className="flex items-center justify-between">
@@ -114,7 +119,7 @@ export default function AuditForm() {
               <span className="mono">{timeLabel}</span>
             </div>
           </div>
-          <div className="flex items-center justify-between mt-2 ">
+          <div className="flex items-center justify-between mt-2">
             <h1 className="num text-2xl tracking-tight" style={{ fontWeight: 700 }}>
               手部衛生稽核
             </h1>
@@ -137,7 +142,6 @@ export default function AuditForm() {
           )}
         </div>
 
-        {/* prominent standalone instruction banner — only shown before a code is picked */}
         {!code && (
           <div className="px-5 mt-2 mb-4">
             <div
@@ -155,7 +159,7 @@ export default function AuditForm() {
           </div>
         )}
 
-        {/* step 1: staff code — moved to the top */}
+        {/* step 1: staff code */}
         <div className="px-5">
           <div className="text-xs mb-2 tracking-wide" style={{ color: "#5B6B72" }}>
             代碼
@@ -179,7 +183,7 @@ export default function AuditForm() {
           </div>
         </div>
 
-        {/* step 2: moment — option A, vertical list cards instead of the pie gauge */}
+        {/* step 2: moment */}
         {code && (
           <div className="px-5 mt-6">
             <div className="text-xs mb-2 tracking-wide" style={{ color: "#5B6B72" }}>
@@ -223,7 +227,6 @@ export default function AuditForm() {
               })}
             </div>
 
-            {/* moment detail — kept in its original position, below the moment picker */}
             {moment && (
               <div
                 className="w-full mt-3 rounded-lg px-3 py-2 text-sm text-center"
@@ -238,7 +241,7 @@ export default function AuditForm() {
           </div>
         )}
 
-        {/* step 3/4: activity + glove, only after moment picked */}
+        {/* step 3: activity */}
         {code && moment && (
           <div className="px-5 mt-6">
             <div className="text-xs mb-2 tracking-wide" style={{ color: "#5B6B72" }}>
@@ -261,30 +264,62 @@ export default function AuditForm() {
                 </button>
               ))}
             </div>
-
-            {activity && (
-              <div className="mt-4">
-                <div className="text-xs mb-2 tracking-wide" style={{ color: "#5B6B72" }}>
-                  手套
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {GLOVES.map((g) => (
-                    <button
-                      key={g.key}
-                      onClick={() => commit(g.key)}
-                      className="rounded-lg py-3 text-sm border"
-                      style={{ borderColor: "#DDE3E4", background: "#FFFFFF", color: "#16242C", fontWeight: 600 }}
-                    >
-                      {g.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         )}
 
-        {/* recent entries log — every row gets its own edit / delete controls */}
+        {/* step 4: glove — optional now, doesn't auto-submit */}
+        {code && moment && activity && (
+          <div className="px-5 mt-4">
+            <div className="flex items-center gap-1.5 text-xs mb-2 tracking-wide" style={{ color: "#5B6B72" }}>
+              <span>手套</span>
+              <span
+                className="px-1.5 py-0.5 rounded text-[10px]"
+                style={{ background: "#F1F4F4", color: "#8A93A1", fontWeight: 600 }}
+              >
+                選填
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {GLOVES.map((g) => (
+                <button
+                  key={g.key}
+                  onClick={() => setGlove((prev) => (prev === g.key ? null : g.key))}
+                  className="rounded-lg py-3 text-sm border"
+                  style={{
+                    borderColor: glove === g.key ? "#0E6E66" : "#DDE3E4",
+                    background: glove === g.key ? "#0E6E66" : "#FFFFFF",
+                    color: glove === g.key ? "#FFFFFF" : "#16242C",
+                    fontWeight: 600,
+                  }}
+                >
+                  {g.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* explicit submit button */}
+        {code && moment && activity && (
+          <div className="px-5 mt-5">
+            <button
+              onClick={handleSubmit}
+              disabled={!canSubmit}
+              className="w-full flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm"
+              style={{
+                background: "#0E6E66",
+                color: "#FFFFFF",
+                fontWeight: 700,
+                opacity: canSubmit ? 1 : 0.5,
+              }}
+            >
+              <Check size={16} />
+              {editingId ? "儲存修改" : "送出這筆紀錄"}
+            </button>
+          </div>
+        )}
+
+        {/* recent entries log */}
         {entries.length > 0 && (
           <div className="px-5 mt-8">
             <div className="text-xs mb-2 tracking-wide" style={{ color: "#5B6B72" }}>
@@ -310,8 +345,8 @@ export default function AuditForm() {
                   >
                     {e.activity}
                   </span>
-                  <span style={{ color: "#5B6B72" }} className="w-10">
-                    {e.glove}
+                  <span style={{ color: e.glove ? "#5B6B72" : "#B8C0C4" }} className="w-10">
+                    {e.glove ?? "—"}
                   </span>
                   <span className="flex items-center gap-1">
                     <button
@@ -338,7 +373,6 @@ export default function AuditForm() {
         )}
       </div>
 
-      {/* floating total counter, bottom right per the original spec */}
       <div
         className="fixed bottom-6 right-6 rounded-full flex flex-col items-center justify-center shadow-lg"
         style={{ width: 64, height: 64, background: "#16242C", color: "#FFFFFF" }}

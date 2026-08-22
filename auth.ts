@@ -28,6 +28,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           name: user.name,
           role: user.role,
           clinicId: user.clinicId,
+          organizationId: user.organizationId,
         };
       },
     }),
@@ -38,13 +39,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (user) {
         token.role = user.role;
         token.clinicId = user.clinicId;
+        token.organizationId = user.organizationId;
       }
       return token;
     },
     session: async ({ session, token }) => {
       if (session.user) {
         session.user.role = token.role as string;
-        session.user.clinicId = token.clinicId as string;
+        session.user.clinicId = token.clinicId as string | null;
+        session.user.organizationId = token.organizationId as string | null;
       }
       return session;
     },
