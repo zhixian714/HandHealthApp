@@ -5,31 +5,6 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Building2, CircleUser, ChevronDown, Download, Calendar } from "lucide-react";
 
-// ---- mock report numbers — the summary card itself still uses placeholder data      ----
-// ---- (wiring this to a real /api/reports endpoint is a separate next step)          ----
-const MOCK_REPORT = {
-  totalMoments: 150,
-  complianceRate: 78.7,
-  activities: [
-    { key: "RUB", label: "酒精乾洗手", count: 83, pct: 55.3, color: "#B8842B" },
-    { key: "WASH", label: "濕洗手", count: 35, pct: 23.3, color: "#2B5FA6" },
-    { key: "MISS", label: "未落實", count: 32, pct: 21.3, color: "#A63B33" },
-  ],
-  missByRole: [
-    { code: "N", label: "護理師", count: 17, pct: 53.1 },
-    { code: "DR", label: "醫師", count: 9, pct: 28.1 },
-    { code: "PC", label: "病房助理", count: 3, pct: 9.4 },
-    { code: "BL", label: "透析技術員", count: 3, pct: 9.4 },
-  ],
-  missByMoment: [
-    { no: 4, count: 11, pct: 34.4 },
-    { no: 3, count: 9, pct: 28.1 },
-    { no: 2, count: 6, pct: 18.8 },
-    { no: 1, count: 4, pct: 12.5 },
-    { no: 5, count: 2, pct: 6.3 },
-  ],
-};
-
 export default function Dashboard() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -40,6 +15,8 @@ export default function Dashboard() {
   const [periodType, setPeriodType] = useState("month");
   const [period, setPeriod] = useState("");
   const [downloading, setDownloading] = useState(false);
+  const [report, setReport] = useState(null);
+  const [loadingReport, setLoadingReport] = useState(false);
 
   // block anyone who isn't SUPER_ADMIN / REGION_ADMIN from seeing this page
   useEffect(() => {
@@ -65,6 +42,20 @@ export default function Dashboard() {
 
   const ready = Boolean(clinicId && period);
   const selectedClinic = clinics.find((c) => c.id === clinicId);
+
+  // once both a clinic and a period are picked, fetch the real summary numbers
+  useEffect(() => {
+    if (!ready) {
+      setReport(null);
+      return;
+    }
+    setLoadingReport(true);
+    const params = new URLSearchParams({ clinicId, periodType, period });
+    fetch(`/api/reports/summary?${params.toString()}`)
+      .then((res) => res.json())
+      .then((data) => setReport(data.error ? null : data))
+      .finally(() => setLoadingReport(false));
+  }, [ready, clinicId, periodType, period]);
 
   const monthOptions = ["2026-07", "2026-06", "2026-05", "2026-04"];
   const quarterOptions = ["2026-Q3", "2026-Q2", "2026-Q1"];
@@ -228,12 +219,23 @@ export default function Dashboard() {
           </div>
         )}
 
-        {ready && (
+        {ready && loadingReport && (
+          <div className="px-5 mt-6">
+            <div
+              className="rounded-2xl p-5 text-center text-sm"
+              style={{ background: "#FFFFFF", border: "1px solid #DDE3E4", color: "#5B6B72" }}
+            >
+              統計資料載入中...
+            </div>
+          </div>
+        )}
+
+        {ready && !loadingReport && report && (
           <div className="px-5 mt-6">
             <div className="rounded-2xl p-5" style={{ background: "#FFFFFF", border: "1px solid #DDE3E4" }}>
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <div className="text-sm font-semibold">{selectedClinic?.name}</div>
+                  <div className="text-sm font-semibold">{report.clinicName}</div>
                   <div className="text-xs mt-0.5" style={{ color: "#5B6B72" }}>
                     {period}（{periodType === "month" ? "月報" : "季報"}）
                   </div>
@@ -246,7 +248,7 @@ export default function Dashboard() {
                     總稽核時機
                   </div>
                   <div className="num text-2xl mt-0.5" style={{ fontWeight: 700 }}>
-                    {MOCK_REPORT.totalMoments}
+                    {report.totalMoments}
                   </div>
                 </div>
                 <div className="rounded-xl p-3" style={{ background: "#EAF5F3" }}>
@@ -254,64 +256,76 @@ export default function Dashboard() {
                     整體遵從率
                   </div>
                   <div className="num text-2xl mt-0.5" style={{ fontWeight: 700, color: "#0A4F49" }}>
-                    {MOCK_REPORT.complianceRate}%
+                    {report.complianceRate}%
                   </div>
                 </div>
               </div>
 
-              <div className="mb-5">
-                <div className="text-xs mb-2 tracking-wide" style={{ color: "#5B6B72" }}>
-                  執行分佈
-                </div>
-                <div className="flex flex-col gap-2">
-                  {MOCK_REPORT.activities.map((a) => (
-                    <div key={a.key} className="flex items-center gap-2">
-                      <span className="text-xs w-20 shrink-0">{a.label}</span>
-                      <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: "#F1F4F4" }}>
-                        <div className="h-full rounded-full" style={{ width: `${a.pct}%`, background: a.color }} />
+              {report.totalMoments === 0 ? (
+                <p className="text-sm text-center py-4" style={{ color: "#5B6B72" }}>
+                  這段期間還沒有任何稽核紀錄
+                </p>
+              ) : (
+                <>
+                  <div className="mb-5">
+                    <div className="text-xs mb-2 tracking-wide" style={{ color: "#5B6B72" }}>
+                      執行分佈
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      {report.activities.map((a) => (
+                        <div key={a.key} className="flex items-center gap-2">
+                          <span className="text-xs w-20 shrink-0">{a.label}</span>
+                          <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: "#F1F4F4" }}>
+                            <div className="h-full rounded-full" style={{ width: `${a.pct}%`, background: a.color }} />
+                          </div>
+                          <span className="mono text-xs w-16 text-right shrink-0" style={{ color: "#5B6B72" }}>
+                            {a.count}（{a.pct}%）
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {report.missByRole.length > 0 && (
+                    <div className="mb-5">
+                      <div className="text-xs mb-2 tracking-wide" style={{ color: "#5B6B72" }}>
+                        未落實職類排行
                       </div>
-                      <span className="mono text-xs w-16 text-right shrink-0" style={{ color: "#5B6B72" }}>
-                        {a.count}（{a.pct}%）
-                      </span>
+                      <div className="flex flex-col gap-1.5">
+                        {report.missByRole.map((r) => (
+                          <div key={r.code} className="flex items-center justify-between text-sm">
+                            <span>
+                              <span className="mono font-semibold">{r.code}</span>{" "}
+                              <span style={{ color: "#5B6B72" }}>{r.label}</span>
+                            </span>
+                            <span className="mono" style={{ color: "#A63B33", fontWeight: 600 }}>
+                              {r.count}（{r.pct}%）
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  ))}
-                </div>
-              </div>
+                  )}
 
-              <div className="mb-5">
-                <div className="text-xs mb-2 tracking-wide" style={{ color: "#5B6B72" }}>
-                  未落實職類排行
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  {MOCK_REPORT.missByRole.map((r) => (
-                    <div key={r.code} className="flex items-center justify-between text-sm">
-                      <span>
-                        <span className="mono font-semibold">{r.code}</span>{" "}
-                        <span style={{ color: "#5B6B72" }}>{r.label}</span>
-                      </span>
-                      <span className="mono" style={{ color: "#A63B33", fontWeight: 600 }}>
-                        {r.count}（{r.pct}%）
-                      </span>
+                  {report.missByMoment.length > 0 && (
+                    <div>
+                      <div className="text-xs mb-2 tracking-wide" style={{ color: "#5B6B72" }}>
+                        未落實時機排行
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        {report.missByMoment.map((m) => (
+                          <div key={m.no} className="flex items-center justify-between text-sm">
+                            <span>時機 {m.no}</span>
+                            <span className="mono" style={{ color: "#A63B33", fontWeight: 600 }}>
+                              {m.count}（{m.pct}%）
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <div className="text-xs mb-2 tracking-wide" style={{ color: "#5B6B72" }}>
-                  未落實時機排行
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  {MOCK_REPORT.missByMoment.map((m) => (
-                    <div key={m.no} className="flex items-center justify-between text-sm">
-                      <span>時機 {m.no}</span>
-                      <span className="mono" style={{ color: "#A63B33", fontWeight: 600 }}>
-                        {m.count}（{m.pct}%）
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+                  )}
+                </>
+              )}
             </div>
 
             <button
