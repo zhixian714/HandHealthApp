@@ -7,9 +7,9 @@ datasource db {
 }
 
 enum Role {
-  SUPER_ADMIN   // 第一種:看全部醫院/診所的統計,不登記 moment
-  REGION_ADMIN  // 第二種:只看自己管理單位底下的診所統計,不登記 moment
-  AUDITOR       // 第三種:只能登記 moment,只看自己診所的統計
+  SUPER_ADMIN   // 第一種:看全部醫院/診所的統計,不登記表單
+  REGION_ADMIN  // 第二種:只看自己管理單位底下的診所統計,不登記表單
+  AUDITOR       // 第三種:登記表單,只看自己診所的統計
 }
 
 enum Activity {
@@ -24,14 +24,13 @@ enum GloveStatus {
   CONT
 }
 
-// 管理單位:例如「北區管理處」,底下掛多間診所
-// SUPER_ADMIN 不需要綁定任何一個 Organization(視為全區權限)
+// 管理單位:例如「江碧雲督導區」,底下掛多間診所
 model Organization {
   id      String   @id @default(cuid())
   name    String
 
   clinics Clinic[]
-  admins  User[]   // 屬於這個管理單位的 REGION_ADMIN 使用者
+  admins  User[]
 
   createdAt DateTime @default(now())
 }
@@ -43,16 +42,16 @@ model User {
   name      String
   role      Role     @default(AUDITOR)
 
-  // AUDITOR 必填;SUPER_ADMIN / REGION_ADMIN 不需要,故改為選填
   clinicId  String?
   clinic    Clinic?  @relation(fields: [clinicId], references: [id])
 
-  // 只有 REGION_ADMIN 會用到,綁定他所管理的單位
   organizationId String?
   organization   Organization? @relation(fields: [organizationId], references: [id])
 
-  moments   Moment[]
-  sessions  AuditSession[]
+  moments             Moment[]
+  sessions            AuditSession[]
+  sharpsObservations  SharpsObservation[]
+  ppeObservations     PpeObservation[]
 
   createdAt DateTime @default(now())
 }
@@ -61,13 +60,15 @@ model Clinic {
   id       String         @id @default(cuid())
   name     String
 
-  // 這間診所屬於哪個管理單位;沒有的話代表尚未分配
   organizationId String?
   organization   Organization? @relation(fields: [organizationId], references: [id])
 
   users    User[]
   moments  Moment[]
   sessions AuditSession[]
+
+  sharpsObservations SharpsObservation[]
+  ppeObservations    PpeObservation[]
 }
 
 model StaffCode {
@@ -94,12 +95,11 @@ model AuditSession {
   createdAt DateTime   @default(now())
 }
 
+// ---- 表單一:手部衛生稽核(原本就有) ----
 model Moment {
   id          String       @id @default(cuid())
   momentNo    Int
   activity    Activity
-
-  // 手套狀態改為選填,對應前端表單的調整
   gloveStatus GloveStatus?
 
   staffCodeId String
@@ -115,4 +115,46 @@ model Moment {
   session     AuditSession @relation(fields: [sessionId], references: [id])
 
   createdAt   DateTime     @default(now())
+}
+
+// ---- 表單二:尖銳物安全使用及處置,3 題皆必填 ----
+model SharpsObservation {
+  id String @id @default(cuid())
+
+  clinicId String
+  clinic   Clinic @relation(fields: [clinicId], references: [id])
+
+  auditorId String
+  auditor   User   @relation(fields: [auditorId], references: [id])
+
+  // 三題,對應紙本表格的三個欄位
+  carriedToPointOfCare Boolean // 尖銳物攜至照護點使用
+  noRecapping          Boolean // 不回套
+  needleNotOnSurface   Boolean // 針頭不置於工作區表面
+
+  observedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+}
+
+// ---- 表單三:個人防護裝備(PPE),5 題皆必填,同一次觀察一起記 ----
+model PpeObservation {
+  id String @id @default(cuid())
+
+  clinicId String
+  clinic   Clinic @relation(fields: [clinicId], references: [id])
+
+  auditorId String
+  auditor   User   @relation(fields: [auditorId], references: [id])
+
+  // 暴露前 3 題
+  maskWorn    Boolean // 配戴口罩(或護目鏡加口罩)
+  gownWorn    Boolean // 穿圍裙或隔離衣
+  glovesWorn  Boolean // 戴手套
+
+  // 暴露後 2 題
+  gownRemovedBeforeNextPatient Boolean // 接觸下一位病患前立即移除並丟棄圍裙/隔離衣
+  glovesRemovedAfterProcedure  Boolean // 執行程序後或暴露後立即移除手套
+
+  observedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
 }

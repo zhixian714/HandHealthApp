@@ -3,12 +3,37 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Building2, CircleUser, ChevronDown, Download, Calendar } from "lucide-react";
+import { Building2, CircleUser, ChevronDown, Download, Calendar, Droplets, Syringe, ShieldCheck } from "lucide-react";
+
+const FORM_TYPES = [
+  {
+    key: "HAND_HYGIENE",
+    label: "手部衛生稽核",
+    icon: Droplets,
+    summaryUrl: "/api/reports/summary",
+    pdfUrl: "/api/reports/pdf",
+  },
+  {
+    key: "SHARPS",
+    label: "尖銳物安全使用及處置",
+    icon: Syringe,
+    summaryUrl: "/api/reports/sharps/summary",
+    pdfUrl: "/api/reports/sharps/pdf",
+  },
+  {
+    key: "PPE",
+    label: "個人防護裝備 (PPE)",
+    icon: ShieldCheck,
+    summaryUrl: "/api/reports/ppe/summary",
+    pdfUrl: "/api/reports/ppe/pdf",
+  },
+];
 
 export default function Dashboard() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
+  const [formType, setFormType] = useState("HAND_HYGIENE");
   const [clinics, setClinics] = useState([]);
   const [loadingClinics, setLoadingClinics] = useState(true);
   const [clinicId, setClinicId] = useState("");
@@ -18,7 +43,8 @@ export default function Dashboard() {
   const [report, setReport] = useState(null);
   const [loadingReport, setLoadingReport] = useState(false);
 
-  // block anyone who isn't SUPER_ADMIN / REGION_ADMIN from seeing this page
+  const activeForm = FORM_TYPES.find((f) => f.key === formType);
+
   useEffect(() => {
     if (status === "loading") return;
     if (!session?.user) {
@@ -30,7 +56,6 @@ export default function Dashboard() {
     }
   }, [session, status, router]);
 
-  // fetch the clinic list this logged-in person is actually allowed to see
   useEffect(() => {
     if (status !== "authenticated") return;
     setLoadingClinics(true);
@@ -43,7 +68,13 @@ export default function Dashboard() {
   const ready = Boolean(clinicId && period);
   const selectedClinic = clinics.find((c) => c.id === clinicId);
 
-  // once both a clinic and a period are picked, fetch the real summary numbers
+  const handleFormTypeChange = (key) => {
+    setFormType(key);
+    setClinicId("");
+    setPeriod("");
+    setReport(null);
+  };
+
   useEffect(() => {
     if (!ready) {
       setReport(null);
@@ -51,11 +82,12 @@ export default function Dashboard() {
     }
     setLoadingReport(true);
     const params = new URLSearchParams({ clinicId, periodType, period });
-    fetch(`/api/reports/summary?${params.toString()}`)
+    fetch(`${activeForm.summaryUrl}?${params.toString()}`)
       .then((res) => res.json())
       .then((data) => setReport(data.error ? null : data))
       .finally(() => setLoadingReport(false));
-  }, [ready, clinicId, periodType, period]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, clinicId, periodType, period, formType]);
 
   const monthOptions = ["2026-07", "2026-06", "2026-05", "2026-04"];
   const quarterOptions = ["2026-Q3", "2026-Q2", "2026-Q1"];
@@ -65,7 +97,7 @@ export default function Dashboard() {
     setDownloading(true);
     try {
       const params = new URLSearchParams({ clinicId, periodType, period });
-      const res = await fetch(`/api/reports/pdf?${params.toString()}`);
+      const res = await fetch(`${activeForm.pdfUrl}?${params.toString()}`);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         alert(err.error ?? "下載失敗，請稍後再試");
@@ -75,9 +107,9 @@ export default function Dashboard() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      // build the same filename convention the server uses: 診所_年_月.pdf
       const safeClinicName = (selectedClinic?.name ?? "報表").replace(/[\\/:*?"<>|]/g, "");
-      a.download = `${safeClinicName}_${period.replace("-", "_")}.pdf`;
+      const labelPart = formType === "HAND_HYGIENE" ? "" : `_${activeForm.label.split(" ")[0]}`;
+      a.download = `${safeClinicName}${labelPart}_${period.replace("-", "_")}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -122,17 +154,48 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* step 1: pick a clinic — options now come from /api/clinics based on role */}
         <div className="px-5">
+          <div className="text-xs mb-2 tracking-wide" style={{ color: "#5B6B72" }}>
+            稽核表類型
+          </div>
+          <div className="flex flex-col gap-2">
+            {FORM_TYPES.map((f) => {
+              const Icon = f.icon;
+              const selected = formType === f.key;
+              return (
+                <button
+                  key={f.key}
+                  onClick={() => handleFormTypeChange(f.key)}
+                  className="flex items-center gap-3 rounded-xl px-4 py-3 text-left"
+                  style={{
+                    border: `2px solid ${selected ? "#0E6E66" : "#DDE3E4"}`,
+                    background: selected ? "#EAF5F3" : "#FFFFFF",
+                  }}
+                >
+                  <span
+                    className="flex items-center justify-center rounded-lg shrink-0"
+                    style={{
+                      width: 32,
+                      height: 32,
+                      background: selected ? "#0E6E66" : "#E9EDEE",
+                      color: selected ? "#FFFFFF" : "#16242C",
+                    }}
+                  >
+                    <Icon size={16} />
+                  </span>
+                  <span className="text-sm font-semibold">{f.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="px-5 mt-6">
           <div className="text-xs mb-2 tracking-wide" style={{ color: "#5B6B72" }}>
             診所 / 醫院
           </div>
           <div className="relative">
-            <Building2
-              size={16}
-              className="absolute left-3 top-1/2 -translate-y-1/2"
-              style={{ color: "#5B6B72" }}
-            />
+            <Building2 size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "#5B6B72" }} />
             <select
               value={clinicId}
               onChange={(e) => setClinicId(e.target.value)}
@@ -140,9 +203,7 @@ export default function Dashboard() {
               className="w-full appearance-none rounded-xl pl-9 pr-9 py-3 text-sm border"
               style={{ borderColor: "#DDE3E4", background: "#FFFFFF", color: "#16242C", fontWeight: 600 }}
             >
-              <option value="">
-                {loadingClinics ? "載入診所清單中..." : "請選擇診所或醫院"}
-              </option>
+              <option value="">{loadingClinics ? "載入診所清單中..." : "請選擇診所或醫院"}</option>
               {clinics.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -192,11 +253,7 @@ export default function Dashboard() {
             </div>
 
             <div className="relative">
-              <Calendar
-                size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2"
-                style={{ color: "#5B6B72" }}
-              />
+              <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "#5B6B72" }} />
               <select
                 value={period}
                 onChange={(e) => setPeriod(e.target.value)}
@@ -230,7 +287,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {ready && !loadingReport && report && (
+        {ready && !loadingReport && report && formType === "HAND_HYGIENE" && (
           <div className="px-5 mt-6">
             <div className="rounded-2xl p-5" style={{ background: "#FFFFFF", border: "1px solid #DDE3E4" }}>
               <div className="flex items-center justify-between mb-4">
@@ -325,6 +382,111 @@ export default function Dashboard() {
                     </div>
                   )}
                 </>
+              )}
+            </div>
+
+            <button
+              onClick={handleDownload}
+              disabled={downloading}
+              className="w-full flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm mt-4"
+              style={{ background: "#16242C", color: "#FFFFFF", fontWeight: 700, opacity: downloading ? 0.6 : 1 }}
+            >
+              <Download size={16} />
+              {downloading ? "產生中..." : "下載 PDF 報表"}
+            </button>
+          </div>
+        )}
+
+        {ready && !loadingReport && report && formType === "SHARPS" && (
+          <div className="px-5 mt-6">
+            <div className="rounded-2xl p-5" style={{ background: "#FFFFFF", border: "1px solid #DDE3E4" }}>
+              <div className="mb-4">
+                <div className="text-sm font-semibold">{report.clinicName}</div>
+                <div className="text-xs mt-0.5" style={{ color: "#5B6B72" }}>
+                  {period}（{periodType === "month" ? "月報" : "季報"}）｜總觀察數 {report.total}
+                </div>
+              </div>
+
+              {report.total === 0 ? (
+                <p className="text-sm text-center py-4" style={{ color: "#5B6B72" }}>
+                  這段期間還沒有任何觀察紀錄
+                </p>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {report.questions.map((q) => (
+                    <div key={q.key}>
+                      <div className="flex items-center justify-between text-sm mb-1">
+                        <span>{q.label}</span>
+                        <span className="mono" style={{ color: "#0E6E66", fontWeight: 600 }}>
+                          {q.pct}%
+                        </span>
+                      </div>
+                      <div className="h-2 rounded-full overflow-hidden" style={{ background: "#F1F4F4" }}>
+                        <div className="h-full rounded-full" style={{ width: `${q.pct}%`, background: "#0E6E66" }} />
+                      </div>
+                      <div className="text-xs mt-1" style={{ color: "#5B6B72" }}>
+                        YES {q.yesCount}　NO {q.noCount}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={handleDownload}
+              disabled={downloading}
+              className="w-full flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm mt-4"
+              style={{ background: "#16242C", color: "#FFFFFF", fontWeight: 700, opacity: downloading ? 0.6 : 1 }}
+            >
+              <Download size={16} />
+              {downloading ? "產生中..." : "下載 PDF 報表"}
+            </button>
+          </div>
+        )}
+
+        {ready && !loadingReport && report && formType === "PPE" && (
+          <div className="px-5 mt-6">
+            <div className="rounded-2xl p-5" style={{ background: "#FFFFFF", border: "1px solid #DDE3E4" }}>
+              <div className="mb-4">
+                <div className="text-sm font-semibold">{report.clinicName}</div>
+                <div className="text-xs mt-0.5" style={{ color: "#5B6B72" }}>
+                  {period}（{periodType === "month" ? "月報" : "季報"}）｜總觀察數 {report.total}
+                </div>
+              </div>
+
+              {report.total === 0 ? (
+                <p className="text-sm text-center py-4" style={{ color: "#5B6B72" }}>
+                  這段期間還沒有任何觀察紀錄
+                </p>
+              ) : (
+                ["暴露前", "暴露後"].map((group) => (
+                  <div key={group} className="mb-5 last:mb-0">
+                    <div className="text-xs mb-2 tracking-wide" style={{ color: "#5B6B72" }}>
+                      {group}
+                    </div>
+                    <div className="flex flex-col gap-3">
+                      {report.questions
+                        .filter((q) => q.group === group)
+                        .map((q) => (
+                          <div key={q.key}>
+                            <div className="flex items-center justify-between text-sm mb-1">
+                              <span>{q.label}</span>
+                              <span className="mono" style={{ color: "#0E6E66", fontWeight: 600 }}>
+                                {q.pct}%
+                              </span>
+                            </div>
+                            <div className="h-2 rounded-full overflow-hidden" style={{ background: "#F1F4F4" }}>
+                              <div className="h-full rounded-full" style={{ width: `${q.pct}%`, background: "#0E6E66" }} />
+                            </div>
+                            <div className="text-xs mt-1" style={{ color: "#5B6B72" }}>
+                              YES {q.yesCount}　NO {q.noCount}
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                ))
               )}
             </div>
 
