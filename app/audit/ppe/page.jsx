@@ -94,10 +94,10 @@ export default function PpeAuditForm() {
           <Link href="/audit" className="flex items-center gap-1 text-sm mb-2" style={{ color: "#5B6B72" }}>
             <ChevronLeft size={16} /> 返回選擇表單
           </Link>
-          <h1 className="num text-2xl tracking-tight" style={{ fontWeight: 700 }}>
-            個人防護裝備稽核 (PPE)
+          <h1 className="num text-3xl tracking-tight" style={{ fontWeight: 700 }}>
+            個人防護裝備 (PPE)
           </h1>
-          <p className="text-xs mt-1" style={{ color: "#5B6B72" }}>
+          <p className="text-m mt-1" style={{ color: "#5B6B72" }}>
             每次觀察，以下 5 題皆為必填
           </p>
 
@@ -115,8 +115,11 @@ export default function PpeAuditForm() {
         </div>
 
         <div className="px-5">
-          <div className="text-xs mb-2 tracking-wide" style={{ color: "#5B6B72" }}>
-            潛在接觸血液或液態化學物質之前
+          <div className="text-m mb-2 tracking-wide flex items-center" style={{ color: "#5B6B72" }}>
+            潛在接觸血液或液態化學物質之
+            <span className="inline-flex items-center justify-center w-6 h-6 bg-red-100 text-red-600 font-bold rounded-full mx-1">
+              前
+            </span>
           </div>
           <div className="flex flex-col gap-3">
             {BEFORE_QUESTIONS.map((q) => (
@@ -125,12 +128,15 @@ export default function PpeAuditForm() {
           </div>
         </div>
 
-        <div className="px-5 mt-6">
-          <div className="text-xs mb-2 tracking-wide" style={{ color: "#5B6B72" }}>
-            暴露接觸血液或液態化學物質之後
+        <div className="px-5">
+          <div className="text-m mb-2 mt-4 tracking-wide flex items-center" style={{ color: "#5B6B72" }}>
+            暴露接觸血液或液態化學物質之
+            <span className="inline-flex items-center justify-center w-6 h-6 bg-red-100 text-red-600 font-bold rounded-full mx-1">
+              後
+            </span>
           </div>
           <div className="flex flex-col gap-3">
-            {AFTER_QUESTIONS.map((q) => (
+            {BEFORE_QUESTIONS.map((q) => (
               <QuestionCard key={q.key} q={q} value={answers[q.key]} onChange={(v) => setAnswer(q.key, v)} />
             ))}
           </div>

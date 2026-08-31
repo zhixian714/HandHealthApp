@@ -62,7 +62,7 @@ export default function SharpsAuditForm() {
           <h1 className="num text-2xl tracking-tight" style={{ fontWeight: 700 }}>
             尖銳物安全使用及處置
           </h1>
-          <p className="text-xs mt-1" style={{ color: "#5B6B72" }}>
+          <p className="text-sm mt-1" style={{ color: "#5B6B72" }}>
             每次觀察，以下 3 題皆為必填
           </p>
 
