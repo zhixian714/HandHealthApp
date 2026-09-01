@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Droplets, Syringe, ShieldCheck } from "lucide-react";
+import { Droplets, Syringe, ShieldCheck, Ruler } from "lucide-react";
 
 const FORMS = [
   {
@@ -21,6 +21,12 @@ const FORMS = [
     icon: ShieldCheck,
     title: "個人防護裝備 (PPE)",
     desc: "5 題，每次觀察皆必填",
+  },
+  {
+    href: "/audit/bbe",
+    icon: Ruler,
+    title: "手肘以下淨空稽核",
+    desc: "醫師／護理人員／清潔人員，當班與符合人數",
   },
 ];
 

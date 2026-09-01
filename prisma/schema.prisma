@@ -52,6 +52,7 @@ model User {
   sessions            AuditSession[]
   sharpsObservations  SharpsObservation[]
   ppeObservations     PpeObservation[]
+  bbeObservations     BbeObservation[]
 
   createdAt DateTime @default(now())
 }
@@ -69,6 +70,7 @@ model Clinic {
 
   sharpsObservations SharpsObservation[]
   ppeObservations    PpeObservation[]
+  bbeObservations    BbeObservation[]
 }
 
 model StaffCode {
@@ -156,5 +158,28 @@ model PpeObservation {
   glovesRemovedAfterProcedure  Boolean // 執行程序後或暴露後立即移除手套
 
   observedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+}
+
+// ---- 表單四:手肘以下淨空稽核,以「當班人數/符合人數」統計,只記三種人員 ----
+model BbeObservation {
+  id String @id @default(cuid())
+
+  clinicId String
+  clinic   Clinic @relation(fields: [clinicId], references: [id])
+
+  auditorId String
+  auditor   User   @relation(fields: [auditorId], references: [id])
+
+  doctorStaffCount     Int // 醫師:當班人員數
+  doctorCompliantCount Int // 醫師:符合人數
+
+  nurseStaffCount     Int // 護理人員:當班人員數
+  nurseCompliantCount Int // 護理人員:符合人數
+
+  cleanerStaffCount     Int // 清潔人員:當班人員數
+  cleanerCompliantCount Int // 清潔人員:符合人數
+
+  observedAt DateTime @default(now()) // 稽核日期(早班/中班各記一筆)
   createdAt  DateTime @default(now())
 }

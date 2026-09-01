@@ -21,10 +21,10 @@ const pct = (part: number, total: number) =>
 
 const sanitizeForFilename = (name: string) => name.replace(/[\\/:*?"<>|]/g, "");
 
-const QUESTIONS = [
-  { key: "carriedToPointOfCare", label: "尖銳物攜至照護點使用" },
-  { key: "noRecapping", label: "不回套" },
-  { key: "needleNotOnSurface", label: "針頭不置於工作區表面" },
+const ROLES = [
+  { key: "doctor", label: "醫師" },
+  { key: "nurse", label: "護理人員" },
+  { key: "cleaner", label: "清潔人員" },
 ] as const;
 
 export async function GET(req: NextRequest) {
@@ -44,15 +44,18 @@ export async function GET(req: NextRequest) {
     }
 
     const { start, end } = getDateRange(periodType, period);
-    const observations = await prisma.sharpsObservation.findMany({
+    const observations = await prisma.bbeObservation.findMany({
       where: { clinicId, observedAt: { gte: start, lt: end } },
     });
 
-    const total = observations.length;
-    const questions = QUESTIONS.map((q) => {
-      const yesCount = observations.filter((o) => o[q.key]).length;
-      return { label: q.label, yesCount, noCount: total - yesCount, pct: pct(yesCount, total) };
+    const roles = ROLES.map((r) => {
+      const staffTotal = observations.reduce((sum, o) => sum + (o as any)[`${r.key}StaffCount`], 0);
+      const compliantTotal = observations.reduce((sum, o) => sum + (o as any)[`${r.key}CompliantCount`], 0);
+      return { label: r.label, staffTotal, compliantTotal, pct: pct(compliantTotal, staffTotal) };
     });
+    const overallStaff = roles.reduce((s, r) => s + r.staffTotal, 0);
+    const overallCompliant = roles.reduce((s, r) => s + r.compliantTotal, 0);
+    const overallPct = pct(overallCompliant, overallStaff);
 
     const todayLabel = new Date().toISOString().slice(0, 10);
     const periodLabel =
@@ -65,20 +68,29 @@ export async function GET(req: NextRequest) {
         body { font-family: "Microsoft JhengHei", "PMingLiU", sans-serif; color: #16242C; padding: 40px; }
         h1 { font-size: 22px; margin: 0 0 6px 0; }
         .meta { color: #5B6B72; font-size: 12px; margin-bottom: 24px; }
+        .headline { border-radius: 10px; padding: 14px 16px; background: #EAF5F3; color: #0A4F49; margin-bottom: 20px; width: 260px; }
+        .headline .label { font-size: 12px; }
+        .headline .value { font-size: 24px; font-weight: 700; margin-top: 4px; }
         table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 16px; }
         th, td { padding: 8px 6px; border-bottom: 1px solid #EEF1F1; text-align: left; }
         th { color: #5B6B72; font-weight: 600; font-size: 12px; }
         td.num { text-align: right; }
       </style></head>
       <body>
-        <h1>尖銳物安全使用及處置稽核報表</h1>
-        <div class="meta">產生日期：${todayLabel}　|　單位：${clinic.name}　|　期間：${periodLabel}　|　總觀察數：${total}</div>
+        <h1>手肘以下淨空稽核報表</h1>
+        <div class="meta">產生日期：${todayLabel}　|　單位：${clinic.name}　|　期間：${periodLabel}</div>
+
+        <div class="headline">
+          <div class="label">整體遵從率 (Overall Compliance)</div>
+          <div class="value">${overallPct}%</div>
+        </div>
+
         <table>
-          <tr><th>稽核項目</th><th class="num">YES</th><th class="num">NO</th><th class="num">符合率</th></tr>
-          ${questions
+          <tr><th>人員類別</th><th class="num">當班人數</th><th class="num">符合人數</th><th class="num">遵從率</th></tr>
+          ${roles
             .map(
-              (q) =>
-                `<tr><td>${q.label}</td><td class="num">${q.yesCount}</td><td class="num">${q.noCount}</td><td class="num">${q.pct}%</td></tr>`
+              (r) =>
+                `<tr><td>${r.label}</td><td class="num">${r.staffTotal}</td><td class="num">${r.compliantTotal}</td><td class="num">${r.pct}%</td></tr>`
             )
             .join("")}
         </table>
@@ -92,7 +104,7 @@ export async function GET(req: NextRequest) {
     await browser.close();
 
     const filePeriod = period.replace("-", "_");
-    const fileName = `${sanitizeForFilename(clinic.name)}_${filePeriod}_尖銳物.pdf`;
+    const fileName = `${sanitizeForFilename(clinic.name)}_${filePeriod}_BBE.pdf`;
 
     return new NextResponse(Buffer.from(pdfBuffer), {
       headers: {
@@ -101,7 +113,7 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("[sharps pdf] 發生錯誤:", error);
+    console.error("[bbe pdf] 發生錯誤:", error);
     return NextResponse.json({ error: "PDF 產生失敗" }, { status: 500 });
   }
 }

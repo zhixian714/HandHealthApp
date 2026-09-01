@@ -104,7 +104,7 @@ export async function GET(req: NextRequest) {
     await browser.close();
 
     const filePeriod = period.replace("-", "_");
-    const fileName = `${sanitizeForFilename(clinic.name)}_PPE_${filePeriod}.pdf`;
+    const fileName = `${sanitizeForFilename(clinic.name)}_${filePeriod}_PPE.pdf`;
 
     return new NextResponse(Buffer.from(pdfBuffer), {
       headers: {
