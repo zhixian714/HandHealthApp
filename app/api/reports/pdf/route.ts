@@ -79,140 +79,81 @@ export async function GET(req: NextRequest) {
     const todayLabel = new Date().toISOString().slice(0, 10);
 
     // ---- build the report as plain HTML/CSS, let Chromium's own text engine handle the Chinese glyphs ----
-// ---- 替換成具有 FRESENIUS 風格的報表排版 ----
     const html = `
       <html>
         <head>
           <meta charset="utf-8" />
           <style>
-            @page {
-                size: A4;
-                margin: 20mm 15mm;
-                background-color: #fdfbf7;
-            }
+            * { box-sizing: border-box; }
             body {
-                font-family: "Microsoft JhengHei", "PMingLiU", "Noto Sans TC", sans-serif;
-                margin: 0;
-                padding: 0;
-                color: #333;
-                line-height: 1.6;
+              font-family: "Microsoft JhengHei", "PMingLiU", "Noto Sans TC", sans-serif;
+              color: #16242C;
+              padding: 40px;
             }
-            .header {
-                text-align: center;
-                border-bottom: 3px solid #2F75B5;
-                padding-bottom: 10px;
-                margin-bottom: 20px;
+            h1 { font-size: 22px; margin: 0 0 6px 0; }
+            .meta { color: #5B6B72; font-size: 12px; margin-bottom: 24px; }
+            .headline { display: flex; gap: 16px; margin-bottom: 28px; }
+            .headline .box {
+              flex: 1; border-radius: 10px; padding: 14px 16px; background: #F5F7F8;
             }
-            h1 { color: #2F75B5; margin: 0; font-size: 24pt; }
-            .date { color: #666; font-size: 12pt; margin-top: 8px; }
-            h2 {
-                color: #333;
-                border-left: 5px solid #2F75B5;
-                padding-left: 10px;
-                font-size: 16pt;
-                margin-top: 30px;
-            }
-            .kpi-container {
-                width: 100%;
-                text-align: center;
-                margin: 20px 0;
-            }
-            .kpi-box {
-                display: inline-block;
-                width: 45%;
-                background: #fff;
-                border: 1px solid #ddd;
-                border-radius: 8px;
-                padding: 15px;
-                margin: 0 2%;
-                box-sizing: border-box;
-            }
-            .kpi-title { font-size: 14pt; color: #555; margin:0 0 10px 0; }
-            .kpi-value { font-size: 24pt; font-weight: bold; color: #E84C3D; margin:0; }
-            .kpi-value.green { color: #27AE60; }
-            
-            table {
-                width: 100%;
-                border-collapse: collapse;
-                margin-top: 10px;
-                background: #fff;
-            }
-            th, td {
-                border: 1px solid #ccc;
-                padding: 10px;
-                text-align: center;
-                font-size: 12pt;
-            }
-            th {
-                background-color: #2F75B5;
-                color: white;
-                font-weight: bold;
-            }
-            tr:nth-child(even) { background-color: #f9f9f9; }
-            .miss-text { color: #E84C3D; font-weight: bold; }
+            .headline .box.rate { background: #EAF5F3; color: #0A4F49; }
+            .headline .label { font-size: 12px; color: #5B6B72; }
+            .headline .box.rate .label { color: #0A4F49; }
+            .headline .value { font-size: 24px; font-weight: 700; margin-top: 4px; }
+            h2 { font-size: 15px; margin: 24px 0 10px 0; border-left: 4px solid #0E6E66; padding-left: 8px; }
+            table { width: 100%; border-collapse: collapse; font-size: 13px; }
+            td { padding: 6px 4px; border-bottom: 1px solid #EEF1F1; }
+            td.num { text-align: right; }
+            .miss td.num { color: #A63B33; font-weight: 600; }
           </style>
         </head>
         <body>
-          <div class="header">
-              <h1>FRESENIUS MEDICAL CARE</h1>
-              <h1>手部衛生稽核分析報表</h1>
-              <div class="date">產生日期：${todayLabel} | 單位：${clinic.name} | 期間：${periodLabel}</div>
-          </div>
-          
-          <div class="kpi-container">
-              <div class="kpi-box">
-                  <p class="kpi-title">總稽核時機 (Total Moments)</p>
-                  <p class="kpi-value">${total}</p>
-              </div>
-              <div class="kpi-box">
-                  <p class="kpi-title">整體遵從率 (Compliance Rate)</p>
-                  <p class="kpi-value green">${complianceRate}%</p>
-              </div>
+          <h1>手部衛生稽核分析報表</h1>
+          <div class="meta">產生日期：${todayLabel}　|　單位：${clinic.name}　|　期間：${periodLabel}</div>
+
+          <div class="headline">
+            <div class="box">
+              <div class="label">總稽核時機 (Total Moments)</div>
+              <div class="value">${total}</div>
+            </div>
+            <div class="box rate">
+              <div class="label">整體遵從率 (Compliance Rate)</div>
+              <div class="value">${complianceRate}%</div>
+            </div>
           </div>
 
           <h2>一、時機點執行分佈 (Wash / Rub / Miss)</h2>
           <table>
-            <tr>
-                <th>活動別 (Action)</th>
-                <th>筆數 (Count)</th>
-                <th>佔比 (Percentage)</th>
-            </tr>
-            ${activities.map((a) => `
-            <tr>
-                <td>${a.label}</td>
-                <td class="${a.label.includes('Miss') ? 'miss-text' : ''}">${a.count}</td>
-                <td class="${a.label.includes('Miss') ? 'miss-text' : ''}">${a.pct}%</td>
-            </tr>`).join("")}
+            ${activities
+              .map(
+                (a) => `<tr><td>${a.label}</td><td class="num">${a.count} 筆（${a.pct}%）</td></tr>`
+              )
+              .join("")}
           </table>
 
           <h2>二、未落實 (Miss) 職類排行榜</h2>
-          <table>
-            <tr>
-                <th>職類代碼 (Role)</th>
-                <th>Miss 數量</th>
-                <th>佔總 Miss 比例</th>
-            </tr>
-            ${missByRole.length ? missByRole.map((r) => `
-            <tr>
-                <td>${r.code}（${r.label}）</td>
-                <td>${r.count}</td>
-                <td>${r.pct}%</td>
-            </tr>`).join("") : `<tr><td colspan="3" style="color:#5B6B72;">此期間無未落實紀錄</td></tr>`}
+          <table class="miss">
+            ${
+              missByRole.length
+                ? missByRole
+                    .map(
+                      (r) =>
+                        `<tr><td>${r.code}（${r.label}）</td><td class="num">${r.count} 次（${r.pct}%）</td></tr>`
+                    )
+                    .join("")
+                : `<tr><td colspan="2" style="color:#5B6B72;">此期間無未落實紀錄</td></tr>`
+            }
           </table>
 
           <h2>三、未落實 (Miss) 時機排行榜</h2>
-          <table>
-            <tr>
-                <th>時機別 (Moment 1-5)</th>
-                <th>Miss 數量</th>
-                <th>佔總 Miss 比例</th>
-            </tr>
-            ${missByMoment.length ? missByMoment.map((m) => `
-            <tr>
-                <td>時機 ${m.no}</td>
-                <td>${m.count}</td>
-                <td>${m.pct}%</td>
-            </tr>`).join("") : `<tr><td colspan="3" style="color:#5B6B72;">此期間無未落實紀錄</td></tr>`}
+          <table class="miss">
+            ${
+              missByMoment.length
+                ? missByMoment
+                    .map((m) => `<tr><td>時機 ${m.no}</td><td class="num">${m.count} 次（${m.pct}%）</td></tr>`)
+                    .join("")
+                : `<tr><td colspan="2" style="color:#5B6B72;">此期間無未落實紀錄</td></tr>`
+            }
           </table>
         </body>
       </html>
@@ -224,9 +165,9 @@ export async function GET(req: NextRequest) {
     const pdfBuffer = await page.pdf({ format: "a4", printBackground: true });
     await browser.close();
 
-    // filename: 診所_年_月.pdf (or 診所_年_Q季.pdf for quarterly reports)
-    const filePeriod = periodType === "month" ? period.replace("-", "_") : period.replace("-", "_");
-    const fileName = `${sanitizeForFilename(clinic.name)}_${filePeriod}.pdf`;
+    // filename: 診所_年_月_稽核名稱.pdf
+    const filePeriod = period.replace("-", "_");
+    const fileName = `${sanitizeForFilename(clinic.name)}_${filePeriod}_手部衛生.pdf`;
 
     return new NextResponse(Buffer.from(pdfBuffer), {
       headers: {
