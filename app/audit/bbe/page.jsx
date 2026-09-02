@@ -81,7 +81,7 @@ export default function BbeAuditForm() {
 
       <div className="w-full max-w-md pb-28" style={{ color: "#16242C" }}>
         <div className="px-5 pt-5 pb-4">
-          <Link href="/audit" className="flex items-center gap-1 text-sm mb-2" style={{ color: "#5B6B72" }}>
+          <Link href="/audit/forms" className="flex items-center gap-1 text-sm mb-2" style={{ color: "#5B6B72" }}>
             <ChevronLeft size={16} /> 返回選擇表單
           </Link>
           <h1 className="num text-2xl tracking-tight" style={{ fontWeight: 700 }}>

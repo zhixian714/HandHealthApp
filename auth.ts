@@ -13,6 +13,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       authorize: async (credentials) => {
         const user = await prisma.user.findUnique({
           where: { email: credentials.email as string },
+          include: { clinic: true },
         });
         if (!user) return null;
 
@@ -28,6 +29,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           name: user.name,
           role: user.role,
           clinicId: user.clinicId,
+          clinicName: user.clinic?.name ?? null,
           organizationId: user.organizationId,
         };
       },
@@ -39,6 +41,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (user) {
         token.role = user.role;
         token.clinicId = user.clinicId;
+        token.clinicName = user.clinicName;
         token.organizationId = user.organizationId;
       }
       return token;
@@ -47,6 +50,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (session.user) {
         session.user.role = token.role as string;
         session.user.clinicId = token.clinicId as string | null;
+        session.user.clinicName = token.clinicName as string | null;
         session.user.organizationId = token.organizationId as string | null;
       }
       return session;

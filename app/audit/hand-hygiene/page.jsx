@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { Pencil, Trash2, Building2, Clock3, CircleUser, Info, Check } from "lucide-react";
+import { Pencil, Trash2, Building2, Clock3, CircleUser, Info, Check, ChevronLeft } from "lucide-react";
+import Link from "next/link";
 
 // ---- static reference data (from the paper form) ----
 const STAFF_CODES = [
@@ -17,10 +18,10 @@ const STAFF_CODES = [
 
 const MOMENTS = [
   { no: 1, short: "接觸病人前", label: "接觸病人前", detail: "接觸病人前或接觸與病患連接的透析機前" },
-  { no: 2, short: "執行程序前", label: "執行程序前", detail: "開始任何侵入性病人照護前/開啟血液迴路管/傷口照護前" },
-  { no: 3, short: "執行程序後", label: "執行程序後", detail: "執行侵入性病人照護/或曝觸體液或血液後" },
-  { no: 4, short: "接觸病人後", label: "接觸病人後", detail: "接觸病人後/或接觸病人連接的透析機後" },
-  { no: 5, short: "接觸環境後", label: "接觸病人環境後", detail: "接觸病人周圍物品/清潔病人已使用的共用設備/環境後" },
+  { no: 2, short: "侵入前", label: "侵入性照護前", detail: "執行侵入性病患照護/程序前" },
+  { no: 3, short: "體液後", label: "體液暴觸後", detail: "執行侵入性病患照護/程序或潛在體液或血液後" },
+  { no: 4, short: "接觸病人後", label: "接觸病人後", detail: "接觸病患或與病患連接的透析機後" },
+  { no: 5, short: "接觸環境後", label: "接觸環境後", detail: "僅只有接觸病患周圍物品/環境後" },
 ];
 
 const ACTIVITIES = [
@@ -42,6 +43,16 @@ export default function AuditForm() {
   const [glove, setGlove] = useState(null); // now optional — no longer auto-commits
   const [entries, setEntries] = useState([]);
   const [editingId, setEditingId] = useState(null);
+  const [loadingEntries, setLoadingEntries] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+
+  // load today's already-submitted entries so the list survives a page refresh
+  useEffect(() => {
+    fetch("/api/moments")
+      .then((res) => res.json())
+      .then((data) => setEntries(data.entries ?? []))
+      .finally(() => setLoadingEntries(false));
+  }, []);
 
   const [now, setNow] = useState(null);
   useEffect(() => {
@@ -70,18 +81,55 @@ export default function AuditForm() {
     setEditingId(null);
   };
 
-  const handleSubmit = () => {
-    if (!canSubmit) return;
-    setEntries((prev) => [
-      { id: editingId ?? Date.now(), code, moment, activity, glove }, // glove may be null
-      ...prev.filter((e) => e.id !== editingId),
-    ]);
-    resetFlow();
+  const handleSubmit = async () => {
+    if (!canSubmit || submitting) return;
+    setSubmitting(true);
+    try {
+      const payload = { code, moment, activity, glove };
+      const res = editingId
+        ? await fetch(`/api/moments/${editingId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          })
+        : await fetch("/api/moments", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error ?? "送出失敗，請稍後再試");
+        return;
+      }
+
+      const saved = await res.json();
+      setEntries((prev) => [saved, ...prev.filter((e) => e.id !== editingId)]);
+      resetFlow();
+    } catch (e) {
+      console.error("送出發生錯誤:", e);
+      alert("發生錯誤，請稍後再試");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const deleteEntry = (id) => {
-    setEntries((prev) => prev.filter((e) => e.id !== id));
+  const deleteEntry = async (id) => {
+    const prevEntries = entries;
+    setEntries((prev) => prev.filter((e) => e.id !== id)); // optimistic
     if (editingId === id) resetFlow();
+    try {
+      const res = await fetch(`/api/moments/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        setEntries(prevEntries); // roll back on failure
+        alert("刪除失敗，請稍後再試");
+      }
+    } catch (e) {
+      setEntries(prevEntries);
+      console.error("刪除發生錯誤:", e);
+      alert("發生錯誤，請稍後再試");
+    }
   };
 
   const editEntry = (entry) => {
@@ -109,6 +157,9 @@ export default function AuditForm() {
       <div className="w-full max-w-md pb-32" style={{ color: "#16242C" }}>
         {/* session bar */}
         <div className="px-5 pt-5 pb-4 sticky top-0 z-10" style={{ background: "#F5F7F8" }}>
+          <Link href="/audit/forms" className="flex items-center gap-1 text-sm mb-2" style={{ color: "#5B6B72" }}>
+            <ChevronLeft size={16} /> 返回選擇表單
+          </Link>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm" style={{ color: "#5B6B72" }}>
               <Building2 size={15} />
@@ -304,17 +355,17 @@ export default function AuditForm() {
           <div className="px-5 mt-5">
             <button
               onClick={handleSubmit}
-              disabled={!canSubmit}
+              disabled={!canSubmit || submitting}
               className="w-full flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm"
               style={{
                 background: "#0E6E66",
                 color: "#FFFFFF",
                 fontWeight: 700,
-                opacity: canSubmit ? 1 : 0.5,
+                opacity: canSubmit && !submitting ? 1 : 0.5,
               }}
             >
               <Check size={16} />
-              {editingId ? "儲存修改" : "送出這筆紀錄"}
+              {submitting ? "送出中..." : editingId ? "儲存修改" : "送出這筆紀錄"}
             </button>
           </div>
         )}

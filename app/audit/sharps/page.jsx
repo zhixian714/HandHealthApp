@@ -56,13 +56,13 @@ export default function SharpsAuditForm() {
 
       <div className="w-full max-w-md pb-28" style={{ color: "#16242C" }}>
         <div className="px-5 pt-5 pb-4">
-          <Link href="/audit" className="flex items-center gap-1 text-sm mb-2" style={{ color: "#5B6B72" }}>
+          <Link href="/audit/forms" className="flex items-center gap-1 text-sm mb-2" style={{ color: "#5B6B72" }}>
             <ChevronLeft size={16} /> 返回選擇表單
           </Link>
           <h1 className="num text-2xl tracking-tight" style={{ fontWeight: 700 }}>
             尖銳物安全使用及處置
           </h1>
-          <p className="text-sm mt-1" style={{ color: "#5B6B72" }}>
+          <p className="text-xs mt-1" style={{ color: "#5B6B72" }}>
             每次觀察，以下 3 題皆為必填
           </p>
 
